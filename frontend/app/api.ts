@@ -9,7 +9,17 @@ export async function register(username: string, password: string) {
             password,
         }),
     });
-    return res.json();
+
+    let data;
+
+    try {
+        data = await res.json();
+    } catch {
+        data = {};
+    }
+
+    if (!res.ok) { throw data; }
+    return data;
 }
 
 export async function login(username: string, password: string) {
@@ -23,5 +33,19 @@ export async function login(username: string, password: string) {
             password,
         }),
     });
-    return res.json();
+
+    // Parse response
+    let data;
+    try {
+        data = await res.json();
+    } catch {
+        data = {};
+    }
+
+    // Throw login error failed
+    if (!res.ok) {
+        throw data;
+    }
+
+    return data;
 }

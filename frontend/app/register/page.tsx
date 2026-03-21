@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { register } from "../api";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import Link from "next/link";
 
 export default function RegisterPage() {
@@ -15,10 +16,20 @@ export default function RegisterPage() {
         e.preventDefault();
         try {
             const result = await register(username, password);
-            console.log(result);
-            router.push("/login");
-        } catch (err) {
-            console.error(err);
+            toast.success("Account creation successful.");
+            setTimeout(() => {
+                router.push("/login");
+            }, 1000);
+        } catch (err: any) {
+            if (err?.username) {
+                toast.error("Registration failed.");
+            } else if (err?.password) {
+                toast.error(err.password[0]);
+            } else if (err?.non_field_errors) {
+                toast.error(err.non_field_errors[0]);
+            } else {
+                toast.error("Registration failed.");
+            }
         }
     }
     return (
@@ -50,13 +61,13 @@ export default function RegisterPage() {
             />
             <button 
                 type="submit"
-                className="w-full bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition"
+                className="w-full bg-[#0e4a5a] text-cyan-300 border border-cyan-700 p-2 rounded-lg hover:bg-cyan-900 transition font-mono tracking-widest"
             >
                 Register
             </button>
-            <p className="text-sm text-center text-gray-600">
+            <p className="text-sm text-center text-cyan-900">
                 Already have an account?{" "}
-                <Link href="/login" className="text-blue-600 hover:underline">
+                <Link href="/login" className="text-cyan-500 hover:underline">
                     Login here.
                 </Link>
             </p>

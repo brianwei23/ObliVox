@@ -4,33 +4,65 @@ import { useState } from "react";
 import { login } from "../api";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import toast from "react-hot-toast";
 
 export default function LoginPage() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
+
+    const [lockTime, setLockTime] = useState<number | null>(null);
+
     const router = useRouter();
 
     async function handleSubmit(e: any) {
         e.preventDefault();
+
+        if (lockTime && lockTime > 0) {
+            toast.error(`Please wait ${lockTime}s before trying again.`);
+            return;
+        }
+
         try {
             const result = await login(username, password);
+            // Only runs if login is successful
             localStorage.setItem("token", result.access);
+
+            toast.success("Login successful!");
             
             router.push("/");
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
+
+            if (err?.remaining_seconds) {
+                const seconds = err.remaining_seconds;
+                setLockTime(seconds);
+                toast.error(`Too many attempts. Try again in ${seconds}s`);
+
+                let timer = seconds;
+                const interval = setInterval(() => {
+                    timer -= 1;
+                    setLockTime(timer);
+
+                    if (timer <= 0) {
+                        clearInterval(interval);
+                        setLockTime(null);
+                    }
+                }, 1000);
+                return;
+            }
+            toast.error(err?.detail || "Invalid username or password");
         }
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0a0e1a]">
             <form 
                 onSubmit={handleSubmit}
-                className="bg-white p-8 rounded-2xl shadow-md w-full max-w-sm space-y-4"
+                className="relative z-10 bg-[#0f1628] border border-cyan-900 p-8 rounded-2xl w-full max-w-sm space-y-4"
             >
-                <h1 className="text-2xl font-bold text-center">Login to ObliVox</h1>
+                <h1 className="text-2xl font-bold text-center text-cyan-400 tracking-widest font-mono">Login to ObliVox</h1>
 
-                <p className="text-sm italic text-center text-gray-500">
+                <p className="text-sm italic text-center text-cyan-900">
                     Silence to all but the chosen.
                 </p>
 
@@ -39,7 +71,7 @@ export default function LoginPage() {
                     placeholder="Username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2 border border-cyan-900 rounded-lg bg-[#141d30] text-cyan-300 placeholder-cyan-900 focus:outline-non focus:ring-2 focus:ring-cyan-600"
                 />
 
                 <input
@@ -47,19 +79,30 @@ export default function LoginPage() {
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full p-2 border border-cyan-900 rounded-lg bg-[#141d30] text-cyan-300 placeholder-cyan-900 focus:outline-non focus:ring-2 focus:ring-cyan-600"
                 />
+
+                {lockTime && (
+                    <p className="text-red-500 text-sm text-center">
+                        Locked. Try again in {lockTime}s
+                    </p>
+                )}
 
                 <button 
                     type="submit"
-                    className="w-full bg-green-600 text-white p-2 rounded-lg hover:bg-green-700 transition"
+                    className={`w-full p-2 rounded-lg transition ${
+                        lockTime
+                            ? "bg-gray-800 cursor-not-allowed text-gray-600"
+                            : "bg-[#0e4a5a] hover:bg-cyan-900 text-cyan-300 border border-cyan-700 font-mono tracking-widest"
+                    }`}
+                    disabled={!!lockTime}
                 >
                     Login
                 </button>
 
-                <p className="text-sm text-center text-gray-600">
+                <p className="text-sm text-center text-cyan-900">
                     Don't have an account?{" "}
-                    <Link href="/register" className="text-blue-600 hover:underline">
+                    <Link href="/register" className="text-cyan-500 hover:underline">
                         Register here.
                     </Link>
                 </p>
