@@ -5,6 +5,7 @@ import { register } from "../api";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import Background from "../site-background"
 
 export default function RegisterPage() {
     const [username, setUsername] = useState("");
@@ -33,14 +34,15 @@ export default function RegisterPage() {
         }
     }
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0a0e1a]">
+        <Background />
         <form 
             onSubmit={handleSubmit}
-            className="bg-white p-8 rounded 2xl shadow-md w-full max-w-sm space-y-4"
+            className="relative z-10 bg-[#0f1628] border border-cyan-900 p-8 rounded-2xl w-full max-w-sm space-y-4"
         >
-            <h1 className="text-2xl font-bold text-center">Register with ObliVox</h1>
+            <h1 className="text-2xl font-bold text-center text-cyan-400 tracking-widest font-mono">Register with ObliVox</h1>
 
-            <p className="text-sm italic text-center text-gray-500">
+            <p className="text-sm italic text-center text-cyan-600">
                 Your voice. Your secrets. Fully protected.
             </p>
 
@@ -49,7 +51,7 @@ export default function RegisterPage() {
                 placeholder="Username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-cyan-900 rounded-lg bg-[#141d30] text-cyan-300 placeholder-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-600"
             />
 
             <input
@@ -57,7 +59,7 @@ export default function RegisterPage() {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-blue-500"
+                className="w-full p-2 border border-cyan-900 rounded-lg bg-[#141d30] text-cyan-300 placeholder-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-600"
             />
             <button 
                 type="submit"
@@ -65,7 +67,7 @@ export default function RegisterPage() {
             >
                 Register
             </button>
-            <p className="text-sm text-center text-cyan-900">
+            <p className="text-sm text-center text-cyan-600">
                 Already have an account?{" "}
                 <Link href="/login" className="text-cyan-500 hover:underline">
                     Login here.

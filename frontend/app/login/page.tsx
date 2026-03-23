@@ -5,6 +5,7 @@ import { login } from "../api";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import Background from "../site-background"
 
 export default function LoginPage() {
     const [username, setUsername] = useState("");
@@ -56,13 +57,14 @@ export default function LoginPage() {
 
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0a0e1a]">
+            <Background />
             <form 
                 onSubmit={handleSubmit}
                 className="relative z-10 bg-[#0f1628] border border-cyan-900 p-8 rounded-2xl w-full max-w-sm space-y-4"
             >
                 <h1 className="text-2xl font-bold text-center text-cyan-400 tracking-widest font-mono">Login to ObliVox</h1>
 
-                <p className="text-sm italic text-center text-cyan-900">
+                <p className="text-sm italic text-center text-cyan-600">
                     Silence to all but the chosen.
                 </p>
 
@@ -71,7 +73,7 @@ export default function LoginPage() {
                     placeholder="Username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full p-2 border border-cyan-900 rounded-lg bg-[#141d30] text-cyan-300 placeholder-cyan-900 focus:outline-non focus:ring-2 focus:ring-cyan-600"
+                    className="w-full p-2 border border-cyan-900 rounded-lg bg-[#141d30] text-cyan-300 placeholder-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-600"
                 />
 
                 <input
@@ -79,7 +81,7 @@ export default function LoginPage() {
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full p-2 border border-cyan-900 rounded-lg bg-[#141d30] text-cyan-300 placeholder-cyan-900 focus:outline-non focus:ring-2 focus:ring-cyan-600"
+                    className="w-full p-2 border border-cyan-900 rounded-lg bg-[#141d30] text-cyan-300 placeholder-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-600"
                 />
 
                 {lockTime && (
@@ -100,7 +102,7 @@ export default function LoginPage() {
                     Login
                 </button>
 
-                <p className="text-sm text-center text-cyan-900">
+                <p className="text-sm text-center text-cyan-600">
                     Don't have an account?{" "}
                     <Link href="/register" className="text-cyan-500 hover:underline">
                         Register here.
