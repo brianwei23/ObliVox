@@ -5,7 +5,7 @@ import { register } from "../api";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import Link from "next/link";
-import Background from "../site-background"
+import Background from "../components/site-background"
 
 export default function RegisterPage() {
     const [username, setUsername] = useState("");

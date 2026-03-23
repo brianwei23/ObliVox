@@ -5,7 +5,7 @@ import { login } from "../api";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import Background from "../site-background"
+import Background from "../components/site-background"
 
 export default function LoginPage() {
     const [username, setUsername] = useState("");
@@ -30,7 +30,7 @@ export default function LoginPage() {
 
             toast.success("Login successful!");
             
-            router.push("/");
+            router.push("/home");
         } catch (err: any) {
             console.error(err);
 
