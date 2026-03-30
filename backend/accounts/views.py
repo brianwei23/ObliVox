@@ -1,15 +1,17 @@
 from rest_framework import generics
 from django.contrib.auth.models import User
-from .serializers import RegisterSerializer
+from .serializers import RegisterSerializer, RecordingSerializer
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.models import User
-from .models import LoginAttempt
+from .models import LoginAttempt, Recording
+import base64
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -75,3 +77,31 @@ class LoginView(APIView):
             "access": str(refresh.access_token),
             "refresh": str(refresh)
         })
+    
+class RecordingListView(APIView):
+    # Only logged in users can access
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        recordings = Recording.objects.filter(user=request.user).order_by('-created_at')
+        serializer = RecordingSerializer(recordings, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        name = request.data.get("name")
+        duration = request.data.get("duration")
+        audio_b64 = request.data.get("audio_data")
+
+        if not all([name, duration, audio_b64]):
+            return Response({"detail": "Missing fields."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        audio_bytes = base64.b64decode(audio_b64)
+
+        recording = Recording.objects.create(
+            user=request.user,
+            name=name,
+            duration=int(duration),
+            audio_data=audio_bytes,
+        )
+
+        return Response(RecordingSerializer(recording).data, status=status.HTTP_201_CREATED)

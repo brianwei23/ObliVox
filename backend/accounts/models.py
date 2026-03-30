@@ -9,3 +9,13 @@ class LoginAttempt(models.Model):
 
     def is_locked(self):
         return self.lockout_until and self.lockout_until > timezone.now()
+
+class Recording(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recordings")
+    name = models.CharField(max_length=255)
+    audio_data = models.BinaryField() 
+    duration = models.IntegerField() # in seconds
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.name}"
