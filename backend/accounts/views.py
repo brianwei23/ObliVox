@@ -105,3 +105,26 @@ class RecordingListView(APIView):
         )
 
         return Response(RecordingSerializer(recording).data, status=status.HTTP_201_CREATED)
+
+class RecordingDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            recording = Recording.objects.get(pk=pk, user=request.user)
+            recording.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Recording.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    def patch(self, request, pk):
+        try:
+            recording = Recording.objects.get(pk=pk, user=request.user)
+            name = request.data.get("name", "").strip()
+            if not name:
+                return Response({"detail": "Name cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+            recording.name = name
+            recording.save()
+            return Response(RecordingSerializer(recording).data)
+        except Recording.DoesNotExist:
+            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)

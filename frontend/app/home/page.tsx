@@ -1,8 +1,9 @@
 "use client";
 
+import "../globals.css";
 import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { getRecordings, uploadRecording } from "../api";
+import { getRecordings, uploadRecording, deleteRecording, renameRecording } from "../api";
 import toast from "react-hot-toast";
 import Background from "../components/site-background"
 import ProtectedRoute from "../components/ProtectedRoute"
@@ -22,6 +23,9 @@ export default function Home() {
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [recordingName, setRecordingName] = useState("");
   const [pendingRecording, setPendingRecording] = useState<{ url: string; duration: number } | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   // Holds MediaRecorder and audio chunks during recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -54,8 +58,9 @@ export default function Home() {
 
   function handleLogout() {
     localStorage.removeItem("token");
+    localStorage.removeItem("refresh");
     toast.success("Logging out.");
-    router.push("/login");
+    router.replace("/login");
   }
 
   async function startRecording() {
@@ -113,13 +118,13 @@ export default function Home() {
       const bytes = Uint8Array.from(atob(saved.audio_data), c => c.charCodeAt(0));
       const blob = new Blob([bytes], { type: "audio/webm" });
 
-      setRecordings(prev => [...prev, {
+      setRecordings(prev => [{
         id: saved.id,
         name: saved.name,
         duration: saved.duration,
         created_at: saved.created_at,
         url: URL.createObjectURL(blob),
-      }]);
+      }, ...prev]);
 
       setShowNamePrompt(false);
       setRecordingName("");
@@ -137,9 +142,35 @@ export default function Home() {
     return `${m}:${s}`;
   }
 
+  async function handleRename(id: number) {
+    if (!editingName.trim()) {
+      toast.error("Name cannot be empty.");
+      return;
+    }
+    try {
+      await renameRecording(id, editingName.trim());
+      setRecordings(prev => prev.map(r => r.id === id ? { ...r, name: editingName.trim() } : r));
+      setEditingId(null);
+      setEditingName("");
+      toast.success("Recording renamed.");
+    } catch {
+      toast.error("Failed to rename recording.");
+    }
+  }
+
+  async function handleDelete(id: number) {
+    try {
+      await deleteRecording(id);
+      setRecordings(prev => prev.filter(r => r.id !== id));
+      toast.success("Recording successfully deleted.");
+    } catch {
+      toast.error("Deletion error.");
+    }
+  }
+
   return (
     <ProtectedRoute>
-      <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#0a0e1a]">
+      <div className="h-screen flex flex-col relative overflow-hidden bg-[#0a0e1a]">
         <Background />
         <div className="relative z-10 flex items-center px-8 py-4 border-cyan-900">
           <h1 className="absolute left-1/2 -translate-x-1/2 text-3xl font-bold text-cyan-400 tracking-widest font-mono">ObliVox</h1>
@@ -154,9 +185,10 @@ export default function Home() {
         </div>
 
         {/* Recordings list */}
-        <div className="relative z-10 px-8 py-6 space-y-3 overflow-y-auto max-w-3xl mx-auto w-full">
-          <h2 className="text-cyan-400 font-mono tracking-widest text-xl mb-4 text-center">My Recordings</h2>
-
+        <h2 className="text-cyan-400 font-mono tracking-widest text-xl mb-4 text-center">My Recordings</h2>
+        <div className="relative z-10 flex-1 px-8 pt-2 pb-6 mb-40 space-y-3 overflow-y-auto max-w-3xl mx-auto w-full oblivox-scrollbar"
+          style={{ maxHeight: 'calc(100vh - 280px)'}}
+        >
           {recordings.length === 0 && (
             <p className="text-cyan-600 font-mono text-sm text-center">No recordings yet.</p>
           )}
@@ -164,12 +196,42 @@ export default function Home() {
           {recordings.map((rec, i) => (
             <div key={i} className="bg-[#0f1628] bg-opacity-80 border border-cyan-900 rounded-xl p-4 flex items-center justify-between gap-4">
               <div className="space-y-1">
-                <p className="text-cyan-300 font-mono font-bold text-lg">{rec.name}</p>
+                <div className="flex items-center gap-2">
+                  {editingId === rec.id ? (
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleRename(rec.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      autoFocus
+                      className="bg-[#141d30] border border-cyan-700 text-cyan-300 font-mono font-bold text-lg rounded-lg px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-cyan-600"
+                    />
+                  ) : (
+                    <p className="text-cyan-300 font-mono font-bold text-lg">{rec.name}</p>
+                  )}
+                  {editingId !== rec.id && (
+                    <button
+                      onClick={() => { setEditingId(rec.id); setEditingName(rec.name); }}
+                      className="text-cyan-700 hover:text-cyan-400 transition text-sm"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </div>
                 <p className="text-cyan-400 font-mono text-sm">
                   {new Date(rec.created_at).toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>
               <audio controls src={rec.url} className="h-8"/>
+              <button
+                onClick={() => setConfirmDeleteId(rec.id)}
+                className="text-red-500 hover:text-red-400 font-mono text-sm border border-red-900 hover:border-red-500 px-4 py-1 rounded-lg transition"
+              >
+                Delete
+              </button>
             </div>
           ))}
         </div>
@@ -213,6 +275,35 @@ export default function Home() {
           </div>
         )}
       </div>
+      {confirmDeleteId !== null && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-[#0f1628] border border-red-900 rounded-2xl p-8 w-full max-w-sm space-y-4">
+            <h2 className="text-red-400 font-mono tracking-widest text-center text-lg">Confirm Deletion</h2>
+            <p className="text-cyan-600 font-mono text-sm text-center">
+              Deletion is permanent and cannot be reversed. Do you want to continue?
+            </p>
+            <div className="flex gap-3">
+              {/* Cancel */}
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 bg-[#0a0e1a] text-cyan-300 border border-cyan-900 p-2 rounded-lg hover:bg-cyan-950 transition font-mono tracking-widest"
+              >
+                Cancel
+              </button>
+              {/* Confirm */}
+              <button
+                onClick={async () => {
+                  await handleDelete(confirmDeleteId);
+                  setConfirmDeleteId(null);
+                }}
+                className="flex-1 bg-red-950 text-red-400 border border-red-700 p-2 rounded-lg hover:bg-red-900 transition font-mono tracking-widest"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ProtectedRoute>
   );
 }

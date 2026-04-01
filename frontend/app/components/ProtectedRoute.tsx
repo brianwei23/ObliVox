@@ -1,21 +1,24 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const router = useRouter();
+    const [checked, setChecked] = useState(false);
+
     useEffect(() => {
         // If no token, go to login
         const token = localStorage.getItem("token");
         if (!token) {
             router.replace("/login");
+        } else {
+            setChecked(true);
         }
     }, []);
 
     // Render nothing until check completes
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (!token) return null;
+    if (!checked) return null;
 
     return <>{children}</>;
 }

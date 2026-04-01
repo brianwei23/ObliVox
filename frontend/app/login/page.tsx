@@ -27,6 +27,7 @@ export default function LoginPage() {
             const result = await login(username, password);
             // Only runs if login is successful
             localStorage.setItem("token", result.access);
+            localStorage.setItem("refresh", result.refresh);
 
             toast.success("Login successful!");
             

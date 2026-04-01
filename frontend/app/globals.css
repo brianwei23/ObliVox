@@ -24,3 +24,22 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.oblivox-scrollbar::-webkit-scrollbar {
+  width: 12px;
+}
+
+.oblivox-scrollbar::-webkit-scrollbar-track {
+  background: #0a0e1a;
+}
+
+.oblivox-scrollbar::-webkit-scrollbar-thumb {
+  background: #0e4a5a;
+  border-radius: 10px;
+  border: 2px solid #6ee7f7;
+}
+
+.oblivox-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6ee7f7;
+  box-shadow: 0 0 10px #6ee7f7;
+}
