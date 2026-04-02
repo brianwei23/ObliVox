@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { login } from "../api";
+import { login, deriveKey, setSessionKey } from "../api";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -26,8 +26,12 @@ export default function LoginPage() {
         try {
             const result = await login(username, password);
             // Only runs if login is successful
+            const key = await deriveKey(password, result.salt);
+            setSessionKey(key); // Stored in memory
+
             localStorage.setItem("token", result.access);
             localStorage.setItem("refresh", result.refresh);
+            localStorage.setItem("salt", result.salt);
 
             toast.success("Login successful!");
             

@@ -1,3 +1,17 @@
+let sessionKey: CryptoKey | null = null;
+
+export function setSessionKey(key: CryptoKey) {
+    sessionKey = key;
+}
+
+export function getSessionKey(): CryptoKey | null {
+    return sessionKey;
+}
+
+export function clearSessionKey() {
+    sessionKey = null;
+}
+
 export async function register(username: string, password: string) {
     const res = await fetch("http://localhost:8000/api/auth/register/", {
         method: "POST",
@@ -62,23 +76,29 @@ export async function getRecordings() {
 }
 
 export async function uploadRecording(name: string, duration: number, audioBlob: Blob) {
-    const token = localStorage.getItem("token");
+    if (!sessionKey) throw { detail: "No encryption key. Please log in again." };
 
-    // Convert blob to base64
-    const base64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
-        reader.readAsDataURL(audioBlob);
-    });
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const arrayBuffer = await audioBlob.arrayBuffer();
+
+    // Encrypt using session key derived from password
+    const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        sessionKey,
+        arrayBuffer
+    );
+
+    const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+    const ivBase64 = btoa(String.fromCharCode(...iv));
 
     const res = await authFetch("http://localhost:8000/api/auth/recordings/", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
         },
-        body: JSON.stringify({name, duration, audio_data: base64}),
+        body: JSON.stringify({name, duration, audio_data: audioBase64, iv: ivBase64 }),
     });
+
     let data;
     try { data = await res.json(); } catch { data = {}; }
     if (!res.ok) throw data;
@@ -151,4 +171,32 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
     }
 
     return res;
+}
+
+export async function deriveKey(password: string, saltBase64: string): Promise<CryptoKey> {
+    const encoder = new TextEncoder();
+    const saltBytes = Uint8Array.from(atob(saltBase64), c => c.charCodeAt(0));
+
+    // Import password
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(password),
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+    );
+
+    // Derive AES-256-GCM key using 310,000 iterations
+    return crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: saltBytes,
+            iterations: 310000,
+            hash: "SHA-256",
+        },
+        keyMaterial, 
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+    );
 }

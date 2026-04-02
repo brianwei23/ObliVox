@@ -28,7 +28,7 @@ class RecordingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Recording
-        fields = ['id', 'name', 'audio_data', 'duration', 'created_at']
+        fields = ['id', 'name', 'audio_data', 'iv', 'duration', 'created_at']
 
     def get_audio_data(self, obj):
         return base64.b64encode(bytes(obj.audio_data)).decode('utf-8')

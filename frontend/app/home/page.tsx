@@ -3,7 +3,7 @@
 import "../globals.css";
 import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { getRecordings, uploadRecording, deleteRecording, renameRecording } from "../api";
+import { getRecordings, uploadRecording, deleteRecording, renameRecording, getSessionKey } from "../api";
 import toast from "react-hot-toast";
 import Background from "../components/site-background"
 import ProtectedRoute from "../components/ProtectedRoute"
@@ -37,9 +37,20 @@ export default function Home() {
     async function fetchRecordings() {
       try {
         const data = await getRecordings();
-        const loaded = data.map((rec: any) => {
-          const bytes = Uint8Array.from(atob(rec.audio_data), c => c.charCodeAt(0));
-          const blob = new Blob([bytes], { type: "audio/webm" });
+        const sessionKey = getSessionKey();
+        const loaded = await Promise.all(data.map(async (rec: any) => {
+          if (!sessionKey) return { id: rec.id, name: rec.name, duration: rec.duration, created_at: rec.created_at, url: "" };
+
+          const iv = Uint8Array.from(atob(rec.iv), c => c.charCodeAt(0));
+          const encryptedBytes = Uint8Array.from(atob(rec.audio_data), c => c.charCodeAt(0));
+
+          const decrypted = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv },
+            sessionKey,
+            encryptedBytes
+          );
+
+          const blob = new Blob([decrypted], { type: "audio/webm" });
           return {
             id: rec.id,
             name: rec.name,
@@ -47,7 +58,7 @@ export default function Home() {
             created_at: rec.created_at,
             url: URL.createObjectURL(blob),
           };
-        });
+        }));
         setRecordings(loaded);
       } catch {
         toast.error("Failed to load recordings.");
@@ -114,9 +125,21 @@ export default function Home() {
     try {
       const saved = await uploadRecording(recordingName.trim(), pendingRecording.duration, pendingBlobRef.current);
 
-      // Convert base64 response to playable URL
-      const bytes = Uint8Array.from(atob(saved.audio_data), c => c.charCodeAt(0));
-      const blob = new Blob([bytes], { type: "audio/webm" });
+      const sessionKey = getSessionKey();
+      if (!sessionKey) {
+        toast.error("No encryption key. Please log in again.");
+        return;
+      }
+
+      // Decrypt audio
+      const iv = Uint8Array.from(atob(saved.iv), c => c.charCodeAt(0));
+      const encryptedBytes = Uint8Array.from(atob(saved.audio_data), c => c.charCodeAt(0));
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        sessionKey,
+        encryptedBytes
+      );
+      const blob = new Blob([decrypted], { type: "audio/webm" });
 
       setRecordings(prev => [{
         id: saved.id,
