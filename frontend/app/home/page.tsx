@@ -3,7 +3,7 @@
 import "../globals.css";
 import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { getRecordings, uploadRecording, deleteRecording, renameRecording, getSessionKey } from "../api";
+import { getRecordings, uploadRecording, deleteRecording, renameRecording, getSessionKey, decryptText } from "../api";
 import toast from "react-hot-toast";
 import Background from "../components/site-background"
 import ProtectedRoute from "../components/ProtectedRoute"
@@ -14,6 +14,7 @@ interface Recording {
   url: string;
   duration: number;
   created_at: string;
+  expires_at: string | null;
 }
 
 export default function Home() {
@@ -26,6 +27,23 @@ export default function Home() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [showSelfDestruct, setShowSelfDestruct] = useState(false);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [pendingName, setPendingName] = useState("");
+
+  const selfDestructOptions = [
+    { label: "5 minutes", minutes: 5 },
+    { label: "10 minutes", minutes: 10 },
+    { label: "30 minutes", minutes: 30 },
+    { label: "1 hour", minutes: 60 },
+    { label: "6 hours", minutes: 360 },
+    { label: "12 hours", minutes: 720 },
+    { label: "1 day", minutes: 1440 },
+    { label: "2 days", minutes: 2880 },
+    { label: "3 days", minutes: 4320 },
+    { label: "4 days", minutes: 5760 },
+    { label: "5 days", minutes: 7200 },
+  ]
 
   // Holds MediaRecorder and audio chunks during recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -39,7 +57,9 @@ export default function Home() {
         const data = await getRecordings();
         const sessionKey = getSessionKey();
         const loaded = await Promise.all(data.map(async (rec: any) => {
-          if (!sessionKey) return { id: rec.id, name: rec.name, duration: rec.duration, created_at: rec.created_at, url: "" };
+          if (!sessionKey) return { id: rec.id, name: "Encrypted", duration: rec.duration, created_at: rec.created_at, url: "" };
+
+          const name = await decryptText(rec.name, rec.name_iv, sessionKey);
 
           const iv = Uint8Array.from(atob(rec.iv), c => c.charCodeAt(0));
           const encryptedBytes = Uint8Array.from(atob(rec.audio_data), c => c.charCodeAt(0));
@@ -53,9 +73,10 @@ export default function Home() {
           const blob = new Blob([decrypted], { type: "audio/webm" });
           return {
             id: rec.id,
-            name: rec.name,
+            name,
             duration: rec.duration,
             created_at: rec.created_at,
+            expires_at: rec.expires_at,
             url: URL.createObjectURL(blob),
           };
         }));
@@ -120,18 +141,25 @@ export default function Home() {
       toast.error("Please enter a name.");
       return;
     }
+    
+    setPendingName(recordingName.trim());
+    setShowNamePrompt(false);
+    setShowSelfDestruct(true);
+  }
+
+  async function finalizeRecording(selectedExpiresAt: string | null) {
     if (!pendingRecording || !pendingBlobRef.current) return;
 
     try {
-      const saved = await uploadRecording(recordingName.trim(), pendingRecording.duration, pendingBlobRef.current);
+      const saved = await uploadRecording(pendingName, pendingRecording.duration, pendingBlobRef.current, selectedExpiresAt);
 
       const sessionKey = getSessionKey();
       if (!sessionKey) {
         toast.error("No encryption key. Please log in again.");
         return;
       }
+      const name = await decryptText(saved.name, saved.name_iv, sessionKey);
 
-      // Decrypt audio
       const iv = Uint8Array.from(atob(saved.iv), c => c.charCodeAt(0));
       const encryptedBytes = Uint8Array.from(atob(saved.audio_data), c => c.charCodeAt(0));
       const decrypted = await crypto.subtle.decrypt(
@@ -139,19 +167,22 @@ export default function Home() {
         sessionKey,
         encryptedBytes
       );
-      const blob = new Blob([decrypted], { type: "audio/webm" });
+      const blob = new Blob([decrypted], { type: "audio/webm"});
 
       setRecordings(prev => [{
         id: saved.id,
-        name: saved.name,
+        name,
         duration: saved.duration,
         created_at: saved.created_at,
+        expires_at: saved.expires_at,
         url: URL.createObjectURL(blob),
       }, ...prev]);
 
-      setShowNamePrompt(false);
+      setShowSelfDestruct(false);
       setRecordingName("");
       setPendingRecording(null);
+      setPendingName("");
+      setExpiresAt(null);
       pendingBlobRef.current = null;
       toast.success("Recording saved.");
     } catch {
@@ -247,6 +278,11 @@ export default function Home() {
                 <p className="text-cyan-400 font-mono text-sm">
                   {new Date(rec.created_at).toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </p>
+                {rec.expires_at && (
+                  <p className="text-red-400 font-mono text-xs">
+                    Expires: {new Date(rec.expires_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
               </div>
               <audio controls src={rec.url} className="h-8"/>
               <button
@@ -293,6 +329,37 @@ export default function Home() {
                 className="w-full bg-[#0e4a5a] text-cyan-300 border border-cyan-700 p-2 rounded-lg hover:bg-cyan-900 transition font-mono tracking-widest"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showSelfDestruct && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60">
+            <div className="bg-[#0f1628] border border-cyan-700 rounded-2xl p-8 w-full max-w-sm space-y-4">
+              <h2 className="text-cyan-400 font-mono tracking-widest text-center">Self Destruct?</h2>
+              <p className="text-cyan-600 font-mono text-xs text-center">
+                Should this recording automatically delete after a certain time? This action is irreversible.
+              </p>
+              <div className="grid gri-cols-2 gap-2">
+                {selfDestructOptions.map((opt) => (
+                  <button 
+                    key={opt.label}
+                    onClick={() => {
+                      const expiry = new Date(Date.now() + opt.minutes * 60 * 1000).toISOString();
+                      finalizeRecording(expiry);
+                    }}
+                    className="bg-[#141d30] text-cyan-300 border border-cyan-900 hover:border-cyan-500 px-3 py-2 rounded-lg font-mono text-xs transition"
+                  > 
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <button 
+                onClick={() => finalizeRecording(null)}
+                className="w-full bg-[#0e4a5a] text-cyan-300 border border-cyan-700 p-2 rounded-lg hover:bg-cyan-900 transition font-mono tracking-widest text-sm"
+              >
+                No, keep forever.
               </button>
             </div>
           </div>

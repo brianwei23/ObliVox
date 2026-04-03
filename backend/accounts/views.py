@@ -103,12 +103,13 @@ class RecordingListView(APIView):
     
     def post(self, request):
         name = request.data.get("name")
+        name_iv = request.data.get("name_iv")
         duration = request.data.get("duration")
         audio_b64 = request.data.get("audio_data")
-
         iv = request.data.get("iv")
+        expires_at = request.data.get("expires_at")
 
-        if not all([name, duration, audio_b64, iv]):
+        if not all([name, name_iv, duration, audio_b64, iv]):
             return Response({"detail": "Missing fields."}, status=status.HTTP_400_BAD_REQUEST)
         
         audio_bytes = base64.b64decode(audio_b64)
@@ -116,9 +117,11 @@ class RecordingListView(APIView):
         recording = Recording.objects.create(
             user=request.user,
             name=name,
+            name_iv=name_iv,
             duration=int(duration),
             audio_data=audio_bytes,
             iv=iv,
+            expires_at=expires_at if expires_at else None,
         )
 
         return Response(RecordingSerializer(recording).data, status=status.HTTP_201_CREATED)
@@ -138,9 +141,11 @@ class RecordingDetailView(APIView):
         try:
             recording = Recording.objects.get(pk=pk, user=request.user)
             name = request.data.get("name", "").strip()
-            if not name:
+            name_iv = request.data.get("name_iv", "").strip()
+            if not name or not name_iv:
                 return Response({"detail": "Name cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
             recording.name = name
+            recording.name_iv = name_iv
             recording.save()
             return Response(RecordingSerializer(recording).data)
         except Recording.DoesNotExist:

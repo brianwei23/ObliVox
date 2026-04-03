@@ -75,7 +75,7 @@ export async function getRecordings() {
     return data;
 }
 
-export async function uploadRecording(name: string, duration: number, audioBlob: Blob) {
+export async function uploadRecording(name: string, duration: number, audioBlob: Blob, expiresAt: string | null) {
     if (!sessionKey) throw { detail: "No encryption key. Please log in again." };
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -91,12 +91,15 @@ export async function uploadRecording(name: string, duration: number, audioBlob:
     const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
     const ivBase64 = btoa(String.fromCharCode(...iv));
 
+    // Encrypt file name
+    const { encrypted: encryptedName, iv: nameIv }  = await encryptText(name, sessionKey);
+
     const res = await authFetch("http://localhost:8000/api/auth/recordings/", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({name, duration, audio_data: audioBase64, iv: ivBase64 }),
+        body: JSON.stringify({name: encryptedName, name_iv: nameIv, duration, audio_data: audioBase64, iv: ivBase64, expires_at: expiresAt }),
     });
 
     let data;
@@ -106,14 +109,16 @@ export async function uploadRecording(name: string, duration: number, audioBlob:
 }
 
 export async function renameRecording(id: number, name: string) {
-    const token = localStorage.getItem("token");
+    if (!sessionKey) throw { detail: "No encryption key. Please log in again." };
+
+    const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, sessionKey);
+
     const res = await authFetch(`http://localhost:8000/api/auth/recordings/${id}/`, {
         method: "PATCH",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
         },
-        body: JSON.stringify({name}),
+        body: JSON.stringify({name: encryptedName, name_iv: nameIv}),
     });
     let data;
     try { data = await res.json(); } catch { data = {}; }
@@ -199,4 +204,29 @@ export async function deriveKey(password: string, saltBase64: string): Promise<C
         false,
         ["encrypt", "decrypt"]
     );
+}
+
+async function encryptText(text: string, key: CryptoKey): Promise<{ encrypted: string, iv: string }> {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(text);
+    const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        encoded
+    );
+    return {
+        encrypted: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+        iv: btoa(String.fromCharCode(...iv)),
+    };
+}
+
+export async function decryptText(encryptedBase64: string, ivBase64: string, key: CryptoKey): Promise<string> {
+    const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+    const encryptedBytes = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+    const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        encryptedBytes
+    );
+    return new TextDecoder().decode(decrypted);
 }

@@ -12,10 +12,12 @@ class LoginAttempt(models.Model):
 
 class Recording(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recordings")
-    name = models.CharField(max_length=255)
+    name = models.TextField()
+    name_iv = models.CharField(max_length=64)
     audio_data = models.BinaryField() 
     iv = models.CharField(max_length=64)
     duration = models.IntegerField() # in seconds
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

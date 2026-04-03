@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getSessionKey } from "../api";
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const router = useRouter();
@@ -10,7 +11,9 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     useEffect(() => {
         // If no token, go to login
         const token = localStorage.getItem("token");
-        if (!token) {
+        const sessionKey = getSessionKey();
+
+        if (!token || !sessionKey) {
             router.replace("/login");
         } else {
             setChecked(true);
