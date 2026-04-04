@@ -240,6 +240,17 @@ export default function Home() {
 
         {/* Recordings list */}
         <h2 className="text-cyan-400 font-mono tracking-widest text-xl mb-4 text-center">My Recordings</h2>
+        <div className="relative z-10 flex justify-center mb-4">
+          <button
+            onClick={() => {
+              console.log("Folders button clicked");
+              router.push("/folders");
+            }}
+            className="bg-[#146b83] text-cyan-300 border border-cyan-700 px-16 py-2 rounded-lg hover:bg-cyan-900 transition font-mono tracking-widest text-sm mt-2"
+          >
+            Folders
+          </button>
+        </div>
         <div className="relative z-10 flex-1 px-8 pt-2 pb-6 mb-40 space-y-3 overflow-y-auto max-w-3xl mx-auto w-full oblivox-scrollbar"
           style={{ maxHeight: 'calc(100vh - 280px)'}}
         >
@@ -341,7 +352,7 @@ export default function Home() {
               <p className="text-cyan-600 font-mono text-xs text-center">
                 Should this recording automatically delete after a certain time? This action is irreversible.
               </p>
-              <div className="grid gri-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {selfDestructOptions.map((opt) => (
                   <button 
                     key={opt.label}

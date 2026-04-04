@@ -35,7 +35,9 @@ export default function LoginPage() {
 
             toast.success("Login successful!");
             
-            router.push("/home");
+            const redirectTo = sessionStorage.getItem("redirectAfterLogin") || "/home";
+            sessionStorage.removeItem("redirectAfterLogin");
+            router.push(redirectTo);
         } catch (err: any) {
             console.error(err);
 

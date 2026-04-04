@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import Recording
+from .models import Recording, Folder
 import base64
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -32,3 +32,8 @@ class RecordingSerializer(serializers.ModelSerializer):
 
     def get_audio_data(self, obj):
         return base64.b64encode(bytes(obj.audio_data)).decode('utf-8')
+    
+class FolderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Folder
+        fields = ['id', 'name', 'name_iv', 'created_at']

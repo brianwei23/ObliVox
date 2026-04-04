@@ -206,7 +206,7 @@ export async function deriveKey(password: string, saltBase64: string): Promise<C
     );
 }
 
-async function encryptText(text: string, key: CryptoKey): Promise<{ encrypted: string, iv: string }> {
+export async function encryptText(text: string, key: CryptoKey): Promise<{ encrypted: string, iv: string }> {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(text);
     const encrypted = await crypto.subtle.encrypt(
@@ -229,4 +229,51 @@ export async function decryptText(encryptedBase64: string, ivBase64: string, key
         encryptedBytes
     );
     return new TextDecoder().decode(decrypted);
+}
+
+export async function getFolders() {
+    const res = await authFetch("http://localhost:8000/api/auth/folders/");
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
+    if (!res.ok) throw data;
+    return data;
+}
+
+export async function createFolder(name: string) {
+    if (!sessionKey) throw { detail: "No encryption key. Please log in again." };
+
+    const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, sessionKey);
+
+    const res = await authFetch("http://localhost:8000/api/auth/folders/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: encryptedName, name_iv: nameIv }),
+    });
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
+    if (!res.ok) throw data;
+    return data;
+}
+
+export async function renameFolder(id: number, name: string) {
+    if (!sessionKey) throw { detail: "No encryption key. Please log in again." };
+
+    const { encrypted: encryptedName, iv: nameIv }  = await encryptText(name, sessionKey);
+
+    const res = await authFetch(`http://localhost:8000/api/auth/folders/${id}/`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: encryptedName, name_iv: nameIv }),
+    });
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
+    if (!res.ok) throw data;
+    return data;
+}
+
+export async function deleteFolder(id: number) {
+    const res = await authFetch(`http://localhost:8000/api/auth/folders/${id}/`, {
+        method: "DELETE",
+    });
+    if (!res.ok) throw await res.json();
 }

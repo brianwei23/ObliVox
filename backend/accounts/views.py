@@ -1,6 +1,6 @@
 from rest_framework import generics
 from django.contrib.auth.models import User
-from .serializers import RegisterSerializer, RecordingSerializer
+from .serializers import RegisterSerializer, RecordingSerializer, FolderSerializer
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.models import User
-from .models import LoginAttempt, Recording, UserProfile
+from .models import LoginAttempt, Recording, UserProfile, Folder
 import base64
 import secrets
 
@@ -149,4 +149,51 @@ class RecordingDetailView(APIView):
             recording.save()
             return Response(RecordingSerializer(recording).data)
         except Recording.DoesNotExist:
+            return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+class FolderListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        folders = Folder.objects.filter(user=request.user).order_by('-created_at')
+        serializer = FolderSerializer(folders, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request):
+        name = request.data.get("name")
+        name_iv = request.data.get("name_iv")
+
+        if not all([name, name_iv]):
+            return Response({"detail": "Fields are missing."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        folder = Folder.objects.create(
+            user=request.user,
+            name=name,
+            name_iv=name_iv,
+        )
+        return Response(FolderSerializer(folder).data, status=status.HTTP_201_CREATED)
+
+class FolderDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            folder = Folder.objects.get(pk=pk, user=request.user)
+            folder.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Folder.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+    def patch(self, request, pk):
+        try:
+            folder = Folder.objects.get(pk=pk, user=request.user)
+            name = request.data.get("name", "").strip()
+            name_iv = request.data.get("name_iv", "").strip()
+            if not name or not name_iv:
+                return Response({"detail": "Name cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+            folder.name = name
+            folder.name_iv = name_iv
+            folder.save()
+            return Response(FolderSerializer(folder).data)
+        except Folder.DoesNotExist:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
