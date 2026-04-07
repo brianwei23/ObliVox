@@ -97,7 +97,20 @@ class RecordingListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        recordings = Recording.objects.filter(user=request.user).order_by('-created_at')
+        folder_id = request.query_params.get("folder_id")
+        is_decoy = request.query_params.get("is_decoy", "false") == "true"
+
+        if folder_id:
+            recordings = Recording.objects.filter(
+                user=request.user,
+                folder_id=folder_id,
+                is_decoy=is_decoy,
+            ).order_by('-created_at')
+        else:
+            recordings = Recording.objects.filter(
+                user=request.user,
+                folder__isnull=True
+            ).order_by('-created_at')
         serializer = RecordingSerializer(recordings, many=True)
         return Response(serializer.data)
     
@@ -108,11 +121,14 @@ class RecordingListView(APIView):
         audio_b64 = request.data.get("audio_data")
         iv = request.data.get("iv")
         expires_at = request.data.get("expires_at")
+        folder_id = request.data.get("folder_id")
 
         if not all([name, name_iv, duration, audio_b64, iv]):
             return Response({"detail": "Missing fields."}, status=status.HTTP_400_BAD_REQUEST)
         
         audio_bytes = base64.b64decode(audio_b64)
+
+        is_decoy = request.data.get("is_decoy", False)
 
         recording = Recording.objects.create(
             user=request.user,
@@ -122,6 +138,8 @@ class RecordingListView(APIView):
             audio_data=audio_bytes,
             iv=iv,
             expires_at=expires_at if expires_at else None,
+            folder_id=folder_id if folder_id else None,
+            is_decoy=is_decoy,
         )
 
         return Response(RecordingSerializer(recording).data, status=status.HTTP_201_CREATED)
@@ -162,19 +180,42 @@ class FolderListView(APIView):
     def post(self, request):
         name = request.data.get("name")
         name_iv = request.data.get("name_iv")
+        has_password = request.data.get("has_password", False)
+        folder_salt = request.data.get("folder_salt", None)
 
         if not all([name, name_iv]):
             return Response({"detail": "Fields are missing."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        password_check = request.data.get("password_check", None)
+        password_check_iv = request.data.get("password_check_iv", None)
+
+        decoy_salt = request.data.get("decoy_salt", None)
+        decoy_check = request.data.get("decoy_check", None)
+        decoy_check_iv = request.data.get("decoy_check_iv", None)
         
         folder = Folder.objects.create(
             user=request.user,
             name=name,
             name_iv=name_iv,
+            has_password=has_password,
+            folder_salt=folder_salt,
+            password_check=password_check,
+            password_check_iv=password_check_iv,
+            decoy_salt=decoy_salt,
+            decoy_check=decoy_check,
+            decoy_check_iv=decoy_check_iv,
         )
         return Response(FolderSerializer(folder).data, status=status.HTTP_201_CREATED)
 
 class FolderDetailView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            folder = Folder.objects.get(pk=pk, user=request.user)
+            return Response(FolderSerializer(folder).data)
+        except Folder.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
     def delete(self, request, pk):
         try:

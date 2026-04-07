@@ -36,4 +36,4 @@ class RecordingSerializer(serializers.ModelSerializer):
 class FolderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Folder
-        fields = ['id', 'name', 'name_iv', 'created_at']
+        fields = ['id', 'name', 'name_iv', 'has_password', 'folder_salt', 'password_check', 'password_check_iv', 'decoy_salt', 'decoy_check', 'decoy_check_iv', 'created_at']

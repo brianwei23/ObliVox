@@ -1,5 +1,7 @@
 let sessionKey: CryptoKey | null = null;
 
+const folderKeys: Map<number, CryptoKey> = new Map();
+
 export function setSessionKey(key: CryptoKey) {
     sessionKey = key;
 }
@@ -10,6 +12,26 @@ export function getSessionKey(): CryptoKey | null {
 
 export function clearSessionKey() {
     sessionKey = null;
+}
+
+const decoyKeys: Map<number, CryptoKey> = new Map();
+
+export function setDecoyKey(folderId: number, key: CryptoKey) {
+    decoyKeys.set(folderId, key);
+}
+
+export function getDecoyKey(folderId: number): CryptoKey | null {
+    return decoyKeys.get(folderId) || null;
+}
+
+const folderIsDecoy: Map<number, boolean> = new Map();
+
+export function setFolderDecoyMode(folderId: number, isDecoy: boolean) {
+    folderIsDecoy.set(folderId, isDecoy);
+}
+
+export function getFolderDecoyMode(folderId: number): boolean {
+    return folderIsDecoy.get(folderId) || false;
 }
 
 export async function register(username: string, password: string) {
@@ -64,42 +86,51 @@ export async function login(username: string, password: string) {
     return data;
 }
 
-export async function getRecordings() {
-    const token = localStorage.getItem("token");
-    const res = await authFetch("http://localhost:8000/api/auth/recordings/", {
-        headers: { "Authorization": `Bearer ${token}` },
-    });
+export async function getRecordings(folderId: number | null = null, isDecoy: boolean = false) {
+    let url = "http://localhost:8000/api/auth/recordings/";
+    if (folderId) {
+        url += `?folder_id=${folderId}&is_decoy=${isDecoy}`;
+    }
+    const res = await authFetch(url); 
     let data;
     try { data = await res.json(); } catch { data = {}; }
     if (!res.ok) throw data;
     return data;
 }
 
-export async function uploadRecording(name: string, duration: number, audioBlob: Blob, expiresAt: string | null) {
-    if (!sessionKey) throw { detail: "No encryption key. Please log in again." };
+export async function uploadRecording(name: string, duration: number, audioBlob: Blob, expiresAt: string | null, folderId: number | null = null, encryptionKey?: CryptoKey, isDecoy: boolean = false) {
+    const keyToUse = encryptionKey || sessionKey;
+    if (!keyToUse) throw { detail: "No encryption key. Please log in again."};
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const arrayBuffer = await audioBlob.arrayBuffer();
 
-    // Encrypt using session key derived from password
+    // Encrypt using key derived from password
     const encrypted = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv },
-        sessionKey,
+        keyToUse,
         arrayBuffer
     );
 
     const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
     const ivBase64 = btoa(String.fromCharCode(...iv));
-
-    // Encrypt file name
-    const { encrypted: encryptedName, iv: nameIv }  = await encryptText(name, sessionKey);
+    const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, keyToUse);
 
     const res = await authFetch("http://localhost:8000/api/auth/recordings/", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({name: encryptedName, name_iv: nameIv, duration, audio_data: audioBase64, iv: ivBase64, expires_at: expiresAt }),
+        body: JSON.stringify({
+            name: encryptedName, 
+            name_iv: nameIv, 
+            duration, 
+            audio_data: audioBase64, 
+            iv: ivBase64, 
+            expires_at: expiresAt, 
+            folder_id: folderId,
+            is_decoy: isDecoy,
+        }),
     });
 
     let data;
@@ -108,10 +139,11 @@ export async function uploadRecording(name: string, duration: number, audioBlob:
     return data;
 }
 
-export async function renameRecording(id: number, name: string) {
-    if (!sessionKey) throw { detail: "No encryption key. Please log in again." };
+export async function renameRecording(id: number, name: string, encryptionKey?: CryptoKey) {
+    const keyToUse = encryptionKey || sessionKey;
+    if (!keyToUse) throw { detail: "No encryption key. Please log in again." };
 
-    const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, sessionKey);
+    const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, keyToUse);
 
     const res = await authFetch(`http://localhost:8000/api/auth/recordings/${id}/`, {
         method: "PATCH",
@@ -239,19 +271,72 @@ export async function getFolders() {
     return data;
 }
 
-export async function createFolder(name: string) {
+export async function getFolder(id: number) {
+    const res = await authFetch(`http://localhost:8000/api/auth/folders/${id}/`);
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
+    if (!res.ok) throw data;
+    return data;
+}
+
+export async function createFolder(name: string, folderPassword: string | null = null, decoyPassword: string | null = null) {
     if (!sessionKey) throw { detail: "No encryption key. Please log in again." };
 
     const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, sessionKey);
 
+    let has_password = false;
+    let folder_salt = null;
+    let password_check = null;
+    let password_check_iv = null;
+    let decoy_salt = null;
+    let decoy_check = null;
+    let decoy_check_iv = null;
+
+    if (folderPassword) {
+        const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+        folder_salt = btoa(String.fromCharCode(...saltBytes));
+        has_password = true;
+
+        const folderKey = await deriveKey(folderPassword, folder_salt);
+
+        const { encrypted, iv } = await encryptText("oblivox-verify", folderKey);
+        password_check = encrypted;
+        password_check_iv = iv;
+
+        if (decoyPassword) {
+            const decoySaltBytes = crypto.getRandomValues(new Uint8Array(16));
+            decoy_salt = btoa(String.fromCharCode(...decoySaltBytes));
+
+            const decoyKey = await deriveKey(decoyPassword, decoy_salt);
+            const { encrypted: de, iv: div } = await encryptText("oblivox-verify", decoyKey);
+            decoy_check = de;
+            decoy_check_iv = div;
+        }
+    }
+
     const res = await authFetch("http://localhost:8000/api/auth/folders/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: encryptedName, name_iv: nameIv }),
+        body: JSON.stringify({ 
+            name: encryptedName, 
+            name_iv: nameIv, 
+            has_password, 
+            folder_salt, 
+            password_check, 
+            password_check_iv,
+            decoy_salt,
+            decoy_check,
+            decoy_check_iv,
+        }),
     });
     let data;
     try { data = await res.json(); } catch { data = {}; }
     if (!res.ok) throw data;
+
+    if (folderPassword && folder_salt) {
+        const key = await deriveKey(folderPassword, folder_salt);
+        setFolderKey(data.id, key);
+    }
     return data;
 }
 
@@ -276,4 +361,20 @@ export async function deleteFolder(id: number) {
         method: "DELETE",
     });
     if (!res.ok) throw await res.json();
+}
+
+export function setFolderKey(folderId: number, key: CryptoKey) {
+    folderKeys.set(folderId, key);
+}
+
+export function getFolderKey(folderId: number): CryptoKey | null {
+    return folderKeys.get(folderId) || null;
+}
+
+export function clearFolderKey(folderId: number) {
+    folderKeys.delete(folderId);
+}
+
+export function clearDecoyKey(folderId: number) {
+    decoyKeys.delete(folderId);
 }
