@@ -3,7 +3,7 @@
 import "../../globals.css";
 import { useRouter, useParams } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { getRecordings, uploadRecording, deleteRecording, renameRecording, getSessionKey, getFolderKey, getDecoyKey, getFolderDecoyMode, decryptText, getFolder } from "../../api";
+import { getRecordings, uploadRecording, deleteRecording, renameRecording, getSessionKey, getFolderKey, getDecoyKey, getFolderDecoyMode, decryptText, getFolder, base64ToUint8Array } from "../../api";
 import toast from "react-hot-toast";
 import Background from "../../components/site-background";
 import ProtectedRoute from "../../components/ProtectedRoute";
@@ -84,7 +84,7 @@ export default function FolderPage() {
                 const loaded = await Promise.all(data.map(async (rec: any) => {
                     const name = await decryptText(rec.name, rec.name_iv, encKey);
                     const iv = Uint8Array.from(atob(rec.iv), c => c.charCodeAt(0));
-                    const encryptedBytes = Uint8Array.from(atob(rec.audio_data), c => c.charCodeAt(0));
+                    const encryptedBytes = base64ToUint8Array(rec.audio_data);
                     const decrypted = await crypto.subtle.decrypt(
                         { name: "AES-GCM", iv },
                         encKey,
@@ -176,7 +176,7 @@ export default function FolderPage() {
 
             const name = await decryptText(saved.name, saved.name_iv, encKey);
             const iv = Uint8Array.from(atob(saved.iv), c => c.charCodeAt(0));
-            const encryptedBytes = Uint8Array.from(atob(saved.audio_data), c => c.charCodeAt(0));
+            const encryptedBytes = base64ToUint8Array(saved.audio_data);
             const decrypted = await crypto.subtle.decrypt(
                 { name: "AES-GCM", iv },
                 encKey,

@@ -112,7 +112,7 @@ export async function uploadRecording(name: string, duration: number, audioBlob:
         arrayBuffer
     );
 
-    const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+    const audioBase64 = arrayBufferToBase64(encrypted);
     const ivBase64 = btoa(String.fromCharCode(...iv));
     const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, keyToUse);
 
@@ -377,4 +377,24 @@ export function clearFolderKey(folderId: number) {
 
 export function clearDecoyKey(folderId: number) {
     decoyKeys.delete(folderId);
+}
+
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+}
+
+export function base64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
 }

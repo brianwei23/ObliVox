@@ -1,3 +1,5 @@
+import logo from '../../public/favicon.ico';
+
 export default function Background() {
   // Pre-calculated fixed coordinate arrays for grid lines in a 1920x1080 space
   const xGridLines = [213, 427, 640, 853, 1067, 1280, 1493, 1707]; // (i+1)*1920/9
@@ -51,6 +53,15 @@ export default function Background() {
       <circle className="ring1" cx="960" cy="540" r="430" fill="none" stroke="#6ee7f7" strokeWidth="1" />
       <circle className="ring2" cx="960" cy="540" r="320" fill="none" stroke="#6ee7f7" strokeWidth="0.8" />
       <circle className="ring3" cx="960" cy="540" r="220" fill="none" stroke="#6ee7f7" strokeWidth="0.6" />
+
+      <image
+        href={logo.src}
+        x="840"
+        y="415"
+        width="250"
+        height="250"
+        opacity="0.8"
+      />      
 
       {/* Top left corner */}
       <circle cx="60" cy="60" r="3" fill="#6ee7f7" opacity="0.4" />
