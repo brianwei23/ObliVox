@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView, LoginView, RecordingListView, RecordingDetailView, FolderListView, FolderDetailView
+from .views import RegisterView, LoginView, RecordingListView, RecordingDetailView, FolderListView, FolderDetailView, SharedRecordingListView, UserSearchView, RecordingShareView
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
@@ -10,4 +10,7 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view()),
     path('folders/', FolderListView.as_view()),
     path('folders/<int:pk>/', FolderDetailView.as_view()),
+    path('users/search/', UserSearchView.as_view(), name='user-search'),
+    path('recordings/<int:pk>/share/', RecordingShareView.as_view(), name='share-recording'),
+    path('recordings/shared/', SharedRecordingListView.as_view(), name='shared-recordings'),
 ]

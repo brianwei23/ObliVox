@@ -3,7 +3,16 @@
 import "../globals.css";
 import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { getRecordings, uploadRecording, deleteRecording, renameRecording, getSessionKey, decryptText, base64ToUint8Array } from "../api";
+import { getRecordings, 
+         uploadRecording, 
+         deleteRecording, 
+         renameRecording, 
+         getSessionKey, 
+         decryptText, 
+         base64ToUint8Array, 
+         searchUsers, 
+         shareRecording 
+       } from "../api";
 import toast from "react-hot-toast";
 import Background from "../components/site-background"
 import ProtectedRoute from "../components/ProtectedRoute"
@@ -31,6 +40,14 @@ export default function Home() {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [pendingName, setPendingName] = useState("");
 
+  const [sharingRecordingId, setSharingRecordingId] = useState<number | null>(null);
+  const [shareSearchQuery, setShareSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{id: number, username: string}[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [targetUser, setTargetUser] = useState<{ id: number; username: string } | null>(null);
+  const [sharePassword, setSharePassword] = useState("");
+  const [isSharingLoading, setIsSharingLoading] = useState(false);
+
   const selfDestructOptions = [
     { label: "5 minutes", minutes: 5 },
     { label: "10 minutes", minutes: 10 },
@@ -44,6 +61,28 @@ export default function Home() {
     { label: "4 days", minutes: 5760 },
     { label: "5 days", minutes: 7200 },
   ]
+
+  const handleFinalShare = async () => {
+    if (!sharePassword || !targetUser || !sharingRecordingId) return;
+
+    const recording = recordings.find(r => r.id === sharingRecordingId);
+    if (!recording) return;
+
+    setIsSharingLoading(true);
+    try {
+      await shareRecording(sharingRecordingId, targetUser.id, sharePassword, recording.url, recording.name);
+      toast.success(`Encrypted and shared with ${targetUser.username}`);
+
+      setSharingRecordingId(null);
+      setTargetUser(null);
+      setSharePassword("");
+    } catch (error) {
+      toast.error("Failed to encrypt and share.");
+      console.error(error);
+    } finally {
+      setIsSharingLoading(false);
+    }
+  };
 
   // Holds MediaRecorder and audio chunks during recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -87,6 +126,28 @@ export default function Home() {
     }
     fetchRecordings();
   }, []);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (shareSearchQuery.trim().length < 2) {
+        setSearchResults([]);
+        setIsSearching(false);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const users = await searchUsers(shareSearchQuery);
+        setSearchResults(users);
+      } catch (error) {
+        console.error("Search failed:", error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [shareSearchQuery])
 
   function handleLogout() {
     localStorage.removeItem("token");
@@ -240,7 +301,7 @@ export default function Home() {
 
         {/* Recordings list */}
         <h2 className="text-cyan-400 font-mono tracking-widest text-xl mb-4 text-center">My Recordings</h2>
-        <div className="relative z-10 flex justify-center mb-4">
+        <div className="relative z-10 flex gap-6 justify-center mb-4">
           <button
             onClick={() => {
               console.log("Folders button clicked");
@@ -249,6 +310,12 @@ export default function Home() {
             className="bg-[#146b83] text-cyan-300 border border-cyan-700 px-16 py-2 rounded-lg hover:bg-cyan-900 transition font-mono tracking-widest text-sm mt-2"
           >
             Folders
+          </button>
+          <button
+            onClick={() => router.push("/shares")}
+            className="bg-[#146b83] text-cyan-300 border border-cyan-700 px-12 py-2 rounded-lg hover:bg-cyan-900 transition font-mono tracking-widest text-sm mt-2"
+          >
+            View Shares
           </button>
         </div>
         <div className="relative z-10 flex-1 px-8 pt-2 pb-6 mb-40 space-y-3 overflow-y-auto max-w-3xl mx-auto w-full oblivox-scrollbar"
@@ -296,12 +363,20 @@ export default function Home() {
                 )}
               </div>
               <audio controls src={rec.url} className="h-8"/>
-              <button
-                onClick={() => setConfirmDeleteId(rec.id)}
-                className="text-red-500 hover:text-red-400 font-mono text-sm border border-red-900 hover:border-red-500 px-4 py-1 rounded-lg transition"
-              >
-                Delete
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSharingRecordingId(rec.id)}
+                  className="text-blue-400 hover:text-blue-300 font-mono text-sm border border-blue-900 hover:border-blue-500 px-4 py-1 rounded-lg transition"
+                >
+                  Share
+                </button>
+                <button
+                  onClick={() => setConfirmDeleteId(rec.id)}
+                  className="text-red-500 hover:text-red-400 font-mono text-sm border border-red-900 hover:border-red-500 px-4 py-1 rounded-lg transition"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -400,6 +475,96 @@ export default function Home() {
                 className="flex-1 bg-red-950 text-red-400 border border-red-700 p-2 rounded-lg hover:bg-red-900 transition font-mono tracking-widest"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sharingRecordingId !== null && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-[#0f1628] border border-blue-900 rounded-2xl p-8 w-full max-w-sm space-y-4">
+      
+            {!targetUser ? (
+              /* Step 1: Search */
+              <>
+                <h2 className="text-blue-400 font-mono tracking-widest text-center text-lg">Share Recording</h2>
+                <p className="text-cyan-600 font-mono text-sm text-center">Search for the recipient.</p>
+                <input
+                  type="text"
+                  value={shareSearchQuery}
+                  onChange={(e) => setShareSearchQuery(e.target.value)}
+                  placeholder="Search username..."
+                  className="w-full bg-[#0a0e1a] text-cyan-300 border border-cyan-900 p-3 rounded-lg outline-none focus:border-cyan-500 font-mono"
+                />
+                <div className="min-h-30 max-h-50 bg-[#0a0e1a] border border-cyan-900 rounded-lg p-2 flex flex-col gap-2 overflow-y-auto">
+                  {isSearching ? (
+                    <p className="text-center animate-pulse py-4 font-mono text-cyan-700">Searching...</p>
+                  ) : searchResults.map((user: any) => (
+                    <button
+                      key={user.id}
+                      onClick={() => setTargetUser(user)}
+                      className="w-full text-left px-4 py-3 bg-[#263552] border border-cyan-900/60 rounded-xl hover:bg-[#1a2b4a] hover:border-cyan-500 text-cyan-300 transition-all duration-200"
+                    >
+                      {user.username}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              /* Step 2: Password */
+              <>
+                <h2 className="text-blue-400 font-mono tracking-widest text-center text-lg">Set Encryption Key</h2>
+                <p className="text-cyan-600 font-mono text-xs text-center">
+                  Create a password for <span className="text-cyan-300">@{targetUser.username}</span>. 
+                  They need this to decrypt the audio.
+                </p>
+                <input
+                  type="password"
+                  value={sharePassword}
+                  onChange={(e) => setSharePassword(e.target.value)}
+                  placeholder="Recipient's password..."
+                  className="w-full bg-[#0a0e1a] text-cyan-300 border border-cyan-900 p-3 rounded-lg outline-none focus:border-cyan-500 font-mono"
+                />
+                <button 
+                  disabled={isSharingLoading}
+                  onClick={async () => {
+                      const rec = recordings.find(r => r.id === sharingRecordingId);
+                      if (!rec) return;
+                      setIsSharingLoading(true);
+                      try {
+                          await shareRecording(sharingRecordingId, targetUser.id, sharePassword, rec.url, rec.name);
+                          toast.success("Encrypted and shared.");
+                          setSharingRecordingId(null);
+                          setTargetUser(null);
+                          setSharePassword("");
+                      } catch {
+                          toast.error("Sharing failed.");
+                      } finally {
+                          setIsSharingLoading(false);
+                      }
+                  }}
+                  className="w-full bg-blue-900/40 text-blue-400 border border-blue-700 p-3 rounded-lg hover:bg-blue-800 transition font-mono"
+                >
+                  {isSharingLoading ? "Encrypting..." : "Encrypt & Send"}
+                </button>
+              </>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => {
+                  if (targetUser) {
+                      setTargetUser(null);
+                      setSharePassword("");
+                  } else {
+                      setSharingRecordingId(null);
+                      setShareSearchQuery("");
+                  }
+                }}
+                className="flex-1 bg-[#0a0e1a] text-cyan-300 border border-cyan-900 p-2 rounded-lg hover:bg-cyan-950 transition font-mono tracking-widest"
+              >
+                {targetUser ? "Back" : "Close"}
               </button>
             </div>
           </div>

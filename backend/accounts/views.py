@@ -1,6 +1,6 @@
 from rest_framework import generics
 from django.contrib.auth.models import User
-from .serializers import RegisterSerializer, RecordingSerializer, FolderSerializer
+from .serializers import RegisterSerializer, RecordingSerializer, FolderSerializer, UserSearchSerializer
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -109,7 +109,8 @@ class RecordingListView(APIView):
         else:
             recordings = Recording.objects.filter(
                 user=request.user,
-                folder__isnull=True
+                folder__isnull=True,
+                shared_by__isnull=True,
             ).order_by('-created_at')
         serializer = RecordingSerializer(recordings, many=True)
         return Response(serializer.data)
@@ -238,3 +239,59 @@ class FolderDetailView(APIView):
             return Response(FolderSerializer(folder).data)
         except Folder.DoesNotExist:
             return Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+class UserSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = request.query_params.get('q', '').strip()
+
+        if not query:
+            return Response([])
+        
+        users = User.objects.filter(
+            username__icontains=query
+        ).exclude(id=request.user.id)[:10]
+
+        serializer = UserSearchSerializer(users, many=True)
+        return Response(serializer.data)
+    
+class SharedRecordingListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = RecordingSerializer
+
+    def get_queryset(self):
+        return Recording.objects.filter(user=self.request.user).exclude(shared_by=None).order_by('-created_at')
+
+class RecordingShareView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            original_recording = Recording.objects.get(pk=pk, user=request.user)
+        except Recording.DoesNotExist:
+            return Response({"detail": "Recording not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        recipient_id = request.data.get("recipient_id")
+        audio_data = request.data.get("audio_data")
+
+        try:
+            recipient = User.objects.get(pk=recipient_id)
+        except User.DoesNotExist:
+            return Response({"detail": "Recipient not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+        name = request.data.get("name")
+        name_iv = request.data.get("name_iv")
+
+        Recording.objects.create(
+            user=recipient,
+            shared_by=request.user,
+            name=name,
+            name_iv=name_iv,
+            audio_data=base64.b64decode(audio_data),
+            iv=request.data.get("iv"),
+            duration=original_recording.duration,
+            salt=request.data.get("salt")
+        )
+
+        return Response({"detail": "Shared successfully."}, status=status.HTTP_201_CREATED)

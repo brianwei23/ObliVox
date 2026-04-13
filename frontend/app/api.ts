@@ -398,3 +398,59 @@ export function base64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
     }
     return bytes;
 }
+
+export async function searchUsers(query: string) {
+    const res = await authFetch(`http://localhost:8000/api/auth/users/search/?q=${encodeURIComponent(query)}`);
+
+    if (!res.ok) {
+        return [];
+    }
+
+    return await res.json();
+}
+
+export async function shareRecording(
+    recordingId: number,
+    recipientId: number,
+    password: string,
+    originalAudioUrl: string,
+    originalName: string,
+) {
+    const response = await fetch(originalAudioUrl);
+    const audioArrayBuffer = await response.arrayBuffer();
+
+    const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+    const saltBase64 = btoa(String.fromCharCode(...saltBytes));
+
+    const shareKey = await deriveKey(password, saltBase64);
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedAudio = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        shareKey,
+        audioArrayBuffer
+    );
+
+    const { encrypted: encryptedName, iv: nameIv } = await encryptText(originalName, shareKey);
+
+    const res = await authFetch(`http://localhost:8000/api/auth/recordings/${recordingId}/share/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            recipient_id: recipientId,
+            audio_data: arrayBufferToBase64(encryptedAudio),
+            iv: btoa(String.fromCharCode(...iv)),
+            salt: saltBase64,
+            name: encryptedName,
+            name_iv: nameIv
+        }),
+    });
+    if (!res.ok) throw await res.json();
+    return await res.json();
+}
+
+export async function getSharedRecordings() {
+    const res = await authFetch(`http://localhost:8000/api/auth/recordings/shared/`);
+    if (!res.ok) throw new Error("Failed to fetch shared recordings.");
+    return await res.json();
+}

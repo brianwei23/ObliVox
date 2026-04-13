@@ -29,6 +29,7 @@ class Folder(models.Model):
 
 class Recording(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recordings")
+    shared_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="sent_shares")
     folder = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name="recordings", null=True, blank=True)
     name = models.TextField()
     name_iv = models.CharField(max_length=64)
@@ -37,6 +38,7 @@ class Recording(models.Model):
     duration = models.IntegerField() # in seconds
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    salt = models.CharField(max_length=255, null=True, blank=True)
 
     is_decoy = models.BooleanField(default=False)
 

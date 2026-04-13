@@ -26,9 +26,11 @@ class RecordingSerializer(serializers.ModelSerializer):
     # Convert binary audio data to base64 string for sending to frontend
     audio_data = serializers.SerializerMethodField()
 
+    shared_by_username = serializers.ReadOnlyField(source='shared_by.username')
+
     class Meta:
         model = Recording
-        fields = ['id', 'name', 'name_iv', 'audio_data', 'iv', 'duration', 'expires_at', 'created_at']
+        fields = ['id', 'name', 'name_iv', 'audio_data', 'iv', 'duration', 'expires_at', 'created_at', 'salt', 'shared_by_username']
 
     def get_audio_data(self, obj):
         return base64.b64encode(bytes(obj.audio_data)).decode('utf-8')
@@ -37,3 +39,8 @@ class FolderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Folder
         fields = ['id', 'name', 'name_iv', 'has_password', 'folder_salt', 'password_check', 'password_check_iv', 'decoy_salt', 'decoy_check', 'decoy_check_iv', 'created_at']
+
+class UserSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username']
