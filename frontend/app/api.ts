@@ -98,7 +98,16 @@ export async function getRecordings(folderId: number | null = null, isDecoy: boo
     return data;
 }
 
-export async function uploadRecording(name: string, duration: number, audioBlob: Blob, expiresAt: string | null, folderId: number | null = null, encryptionKey?: CryptoKey, isDecoy: boolean = false) {
+export async function uploadRecording(
+    name: string, 
+    duration: number, 
+    audioBlob: Blob, 
+    expiresAt: string | null, 
+    folderId: number | null = null, 
+    encryptionKey?: CryptoKey, 
+    isDecoy: boolean = false,
+    fileHash?: string
+) {
     const keyToUse = encryptionKey || sessionKey;
     if (!keyToUse) throw { detail: "No encryption key. Please log in again."};
 
@@ -130,6 +139,7 @@ export async function uploadRecording(name: string, duration: number, audioBlob:
             expires_at: expiresAt, 
             folder_id: folderId,
             is_decoy: isDecoy,
+            file_hash: fileHash,
         }),
     });
 
@@ -415,6 +425,7 @@ export async function shareRecording(
     password: string,
     originalAudioUrl: string,
     originalName: string,
+    fileHash?: string
 ) {
     const response = await fetch(originalAudioUrl);
     const audioArrayBuffer = await response.arrayBuffer();
@@ -442,7 +453,8 @@ export async function shareRecording(
             iv: btoa(String.fromCharCode(...iv)),
             salt: saltBase64,
             name: encryptedName,
-            name_iv: nameIv
+            name_iv: nameIv,
+            file_hash: fileHash,
         }),
     });
     if (!res.ok) throw await res.json();

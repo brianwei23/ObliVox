@@ -39,6 +39,7 @@ class Recording(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     salt = models.CharField(max_length=255, null=True, blank=True)
+    file_hash = models.CharField(max_length=64, null=True, blank=True)
 
     is_decoy = models.BooleanField(default=False)
 

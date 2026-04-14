@@ -16,6 +16,8 @@ import { getRecordings,
 import toast from "react-hot-toast";
 import Background from "../components/site-background"
 import ProtectedRoute from "../components/ProtectedRoute"
+import { generateHash, computeIntegrity } from "../components/hashUtils";
+import { stringify } from "querystring";
 
 interface Recording {
   id: number;
@@ -24,6 +26,7 @@ interface Recording {
   duration: number;
   created_at: string;
   expires_at: string | null;
+  file_hash?: string;
 }
 
 export default function Home() {
@@ -47,6 +50,12 @@ export default function Home() {
   const [targetUser, setTargetUser] = useState<{ id: number; username: string } | null>(null);
   const [sharePassword, setSharePassword] = useState("");
   const [isSharingLoading, setIsSharingLoading] = useState(false);
+  const [verifyingId, setVerifyingId] = useState<number | null>(null);
+  const [integrityResult, setIntegrityResult] = useState<{
+    storedHash: string;
+    computedHash: string;
+    matched: Boolean;
+  } | null>(null);
 
   const selfDestructOptions = [
     { label: "5 minutes", minutes: 5 },
@@ -70,7 +79,14 @@ export default function Home() {
 
     setIsSharingLoading(true);
     try {
-      await shareRecording(sharingRecordingId, targetUser.id, sharePassword, recording.url, recording.name);
+      await shareRecording(
+        sharingRecordingId, 
+        targetUser.id, 
+        sharePassword, 
+        recording.url, 
+        recording.name,
+        recording.file_hash
+      );
       toast.success(`Encrypted and shared with ${targetUser.username}`);
 
       setSharingRecordingId(null);
@@ -117,6 +133,7 @@ export default function Home() {
             created_at: rec.created_at,
             expires_at: rec.expires_at,
             url: URL.createObjectURL(blob),
+            file_hash: rec.file_hash,
           };
         }));
         setRecordings(loaded);
@@ -212,7 +229,18 @@ export default function Home() {
     if (!pendingRecording || !pendingBlobRef.current) return;
 
     try {
-      const saved = await uploadRecording(pendingName, pendingRecording.duration, pendingBlobRef.current, selectedExpiresAt);
+      const audioHash = await generateHash(pendingBlobRef.current);
+
+      const saved = await uploadRecording(
+        pendingName, 
+        pendingRecording.duration, 
+        pendingBlobRef.current, 
+        selectedExpiresAt,
+        null,
+        undefined,
+        false,
+        audioHash
+      );
 
       const sessionKey = getSessionKey();
       if (!sessionKey) {
@@ -237,6 +265,7 @@ export default function Home() {
         created_at: saved.created_at,
         expires_at: saved.expires_at,
         url: URL.createObjectURL(blob),
+        file_hash: saved.file_hash,
       }, ...prev]);
 
       setShowSelfDestruct(false);
@@ -370,6 +399,27 @@ export default function Home() {
                 >
                   Share
                 </button>
+                <button
+                  disabled={verifyingId === rec.id}
+                  onClick={async () => {
+                    setVerifyingId(rec.id);
+                    const result = await computeIntegrity(rec.url, rec.file_hash);
+                    setVerifyingId(null);
+                    if (!result) {
+                      setIntegrityResult({
+                        storedHash: rec.file_hash || "N/A",
+                        computedHash: "Failed to compute",
+                        matched: false,
+                      });
+                    } else {
+                      setIntegrityResult(result);
+                    }
+                  }}
+                  className="text-cyan-400 hover:text-cyan-200 font-mono text-sm border border-cyan-900 hover:border-cyan-500 px-4 py-1 rounded-lg transition"
+                >
+                  {verifyingId === rec.id ? "Hashing..." : "Verify integrity"}
+                </button>
+
                 <button
                   onClick={() => setConfirmDeleteId(rec.id)}
                   className="text-red-500 hover:text-red-400 font-mono text-sm border border-red-900 hover:border-red-500 px-4 py-1 rounded-lg transition"
@@ -533,7 +583,7 @@ export default function Home() {
                       if (!rec) return;
                       setIsSharingLoading(true);
                       try {
-                          await shareRecording(sharingRecordingId, targetUser.id, sharePassword, rec.url, rec.name);
+                          await shareRecording(sharingRecordingId, targetUser.id, sharePassword, rec.url, rec.name, rec.file_hash);
                           toast.success("Encrypted and shared.");
                           setSharingRecordingId(null);
                           setTargetUser(null);
@@ -569,6 +619,46 @@ export default function Home() {
             </div>
           </div>
         </div>
+      )}
+
+      {integrityResult !== null && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60">
+              <div className="bg-[#0f1628] border border-cyan-700 rounded-2xl p-8 w-full max-w-lg space-y-4">
+                  <h2 className="text-cyan-400 font-mono tracking-widest text-center text-lg">
+                      Integrity Check (SHA-256)
+                  </h2>
+
+                  <div className="space-y-3">
+                      <div>
+                          <p className="text-cyan-600 font-mono text-sm mb-1">Stored Hash:</p>
+                          <p className="text-cyan-300 font-mono text-sm break-all bg-[#0a0e1a] p-2 rounded-lg border border-cyan-900">
+                              {integrityResult.storedHash}
+                          </p>
+                      </div>
+                      <div>
+                          <p className="text-cyan-600 font-mono text-sm mb-1">Current Computed Hash:</p>
+                          <p className="text-cyan-300 font-mono text-sm break-all bg-[#0a0e1a] p-2 rounded-lg border border-cyan-900">
+                              {integrityResult.computedHash}
+                          </p>
+                      </div>
+                  </div>
+
+                  <div className={`text-center font-mono text-lg font-bold py-2 rounded-lg ${
+                      integrityResult.matched
+                          ? "text-green-400 bg-green-950 border border-green-700"
+                          : "text-red-400 bg-red-950 border border-red-700"
+                  }`}>
+                      {integrityResult.matched ? "Hashes match!" : "Hash mismatch."}
+                  </div>
+
+                  <button
+                      onClick={() => setIntegrityResult(null)}
+                      className="w-full bg-[#0a0e1a] text-cyan-300 border border-cyan-900 p-2 rounded-lg hover:bg-cyan-950 transition font-mono tracking-widest"
+                  >
+                      Close
+                  </button>
+              </div>
+          </div>
       )}
     </ProtectedRoute>
   );

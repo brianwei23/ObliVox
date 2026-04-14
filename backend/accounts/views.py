@@ -131,6 +131,8 @@ class RecordingListView(APIView):
 
         is_decoy = request.data.get("is_decoy", False)
 
+        file_hash = request.data.get("file_hash")
+
         recording = Recording.objects.create(
             user=request.user,
             name=name,
@@ -141,6 +143,7 @@ class RecordingListView(APIView):
             expires_at=expires_at if expires_at else None,
             folder_id=folder_id if folder_id else None,
             is_decoy=is_decoy,
+            file_hash=file_hash,
         )
 
         return Response(RecordingSerializer(recording).data, status=status.HTTP_201_CREATED)
@@ -291,7 +294,8 @@ class RecordingShareView(APIView):
             audio_data=base64.b64decode(audio_data),
             iv=request.data.get("iv"),
             duration=original_recording.duration,
-            salt=request.data.get("salt")
+            salt=request.data.get("salt"),
+            file_hash=original_recording.file_hash,
         )
 
         return Response({"detail": "Shared successfully."}, status=status.HTTP_201_CREATED)

@@ -5,6 +5,7 @@ import { getSharedRecordings, decryptText, base64ToUint8Array, deleteRecording }
 import Background from "../components/site-background";
 import ProtectedRoute from "../components/ProtectedRoute";
 import { useRouter } from "next/navigation";
+import { computeIntegrity } from "../components/hashUtils";
 import toast from "react-hot-toast";
 
 export default function SharesPage() {
@@ -12,6 +13,13 @@ export default function SharesPage() {
     const [shares, setShares] = useState<any[]>([]);
     const [passwords, setPasswords] = useState<{ [key: number]: string }>({});
     const [confirmDeleteShareId, setConfirmDeleteShareId] = useState<number | null>(null);
+
+    const [verifyingId, setVerifyingId] = useState<number | null>(null);
+    const [integrityResult, setIntegrityResult] = useState<{
+        storedHash: string;
+        computedHash: string;
+        matched: Boolean;
+    } | null>(null);
 
     useEffect(() => {
         fetchShares();
@@ -114,14 +122,37 @@ return (
                                 {!share.unlocked && (
                                     <button
                                         onClick={() => unlockShare(share.id)}
-                                        className="px-4 bg-blue-900/40 text-blue-400 border border-blue-700 py-2 rounded-lg text-xs font-mono hover:bg-blue-800 transition"
+                                        className="px-4 bg-blue-900/40 text-blue-400 border border-blue-700 py-4 rounded-lg text-xs font-mono hover:bg-blue-800 transition"
                                     >
                                         Unlock
                                     </button>
                                 )}
+
+                                {share.unlocked && (
+                                    <button
+                                        disabled={verifyingId === share.id}
+                                        onClick={async () => {
+                                            setVerifyingId(share.id);
+                                            const result = await computeIntegrity(share.url, share.file_hash);
+                                            setVerifyingId(null);
+                                            if (!result) {
+                                                setIntegrityResult({
+                                                    storedHash: share.file_hash || "N/A",
+                                                    computedHash: "Failed to compute",
+                                                    matched: false,
+                                                });
+                                            } else {
+                                                setIntegrityResult(result);
+                                            }
+                                        }}
+                                        className="text-cyan-400 hover:text-cyan-200 font-mono text-sm border border-cyan-900 hover:border-cyan-500 px-4 py-1 rounded-lg transition"
+                                    >
+                                        {verifyingId === share.id ? "Hashing..." : "Verify integrity"}
+                                    </button>                                    
+                                )}
                                 <button
                                     onClick={() => setConfirmDeleteShareId(share.id)}
-                                    className="w-fit px-4 bg-red-950/20 text-red-500 border border-red-900 hover:border-red-500 hover:text-red-400  py-2 rounded-lg text-xs font-mono transition"
+                                    className="w-fit px-4 bg-red-950/20 text-red-500 border border-red-900 hover:border-red-500 hover:text-red-400  py-4 rounded-lg text-xs font-mono transition"
                                 >
                                     Delete
                                 </button>
@@ -158,8 +189,47 @@ return (
                     </div>
                 </div>
             )}
+
+            {integrityResult !== null && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black bg-opacity-60">
+                    <div className="bg-[#0f1628] border border-cyan-700 rounded-2xl p-8 w-full max-w-lg space-y-4">
+                        <h2 className="text-cyan-400 font-mono tracking-widest text-center text-lg">
+                            Integrity Check (SHA-256)
+                        </h2>
+
+                        <div className="space-y-3">
+                            <div>
+                                <p className="text-cyan-600 font-mono text-sm mb-1">Stored Hash:</p>
+                                <p className="text-cyan-300 font-mono text-sm break-all bg-[#0a0e1a] p-2 rounded-lg border border-cyan-900">
+                                    {integrityResult.storedHash}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-cyan-600 font-mono text-sm mb-1">Current Computed Hash:</p>
+                                <p className="text-cyan-300 font-mono text-sm break-all bg-[#0a0e1a] p-2 rounded-lg border border-cyan-900">
+                                    {integrityResult.computedHash}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className={`text-center font-mono text-lg font-bold py-2 rounded-lg ${
+                            integrityResult.matched
+                                ? "text-green-400 bg-green-950 border border-green-700"
+                                : "text-red-400 bg-red-950 border border-red-700"
+                        }`}>
+                            {integrityResult.matched ? "Hashes match!" : "Hash mismatch."}
+                        </div>
+
+                        <button
+                            onClick={() => setIntegrityResult(null)}
+                            className="w-full bg-[#0a0e1a] text-cyan-300 border border-cyan-900 p-2 rounded-lg hover:bg-cyan-950 transition font-mono tracking-widest"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
         </>
     </ProtectedRoute>
   );
-
 }
