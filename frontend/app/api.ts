@@ -466,3 +466,36 @@ export async function getSharedRecordings() {
     if (!res.ok) throw new Error("Failed to fetch shared recordings.");
     return await res.json();
 }
+
+// Save log ID from login response for logout recording
+export function saveLogId(logId: number) {
+    sessionStorage.setItem("log_id", String(logId));
+}
+
+export function getLogId(): string | null {
+    return sessionStorage.getItem("log_id");
+}
+
+export async function recordLogout() {
+    const logId = getLogId();
+    if (!logId) return;
+    try {
+        await authFetch("http://localhost:8000/api/auth/logs/logout/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ log_id: parseInt(logId) }),
+            keepalive: true,
+        });
+        sessionStorage.removeItem("log_id");
+    } catch (err) {
+        console.error("Failed to record logout time:", err);
+    }
+}
+
+export async function getLoginLogs() {
+    const res = await authFetch("http://localhost:8000/api/auth/logs/");
+    let data;
+    try { data = await res.json(); } catch { data = []; }
+    if (!res.ok) throw data;
+    return data;
+}

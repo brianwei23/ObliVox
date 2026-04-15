@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { getSessionKey } from "../api";
+import { getSessionKey, recordLogout } from "../api";
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const router = useRouter();
@@ -10,6 +10,11 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     const [checked, setChecked] = useState(false);
 
     useEffect(() => {
+
+        const handleRefresh = () => {
+            recordLogout();
+        };
+        window.addEventListener("beforeunload", handleRefresh);
         // If no token, go to login
         const token = localStorage.getItem("token");
         const sessionKey = getSessionKey();
@@ -25,6 +30,9 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
             console.log("Auth check passed, rendering children");
             setChecked(true);
         }
+        return () => {
+            window.removeEventListener("beforeunload", handleRefresh);
+        };
     }, [pathname, router]);
 
     // Render nothing until check completes

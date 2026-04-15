@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { login, deriveKey, setSessionKey } from "../api";
+import { login, deriveKey, setSessionKey, saveLogId } from "../api";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -15,13 +15,19 @@ export default function LoginPage() {
 
     const router = useRouter();
 
+    const [isLoading, setIsLoading] = useState(false);
+
     async function handleSubmit(e: any) {
         e.preventDefault();
+
+        if (isLoading) return;
 
         if (lockTime && lockTime > 0) {
             toast.error(`Please wait ${lockTime}s before trying again.`);
             return;
         }
+
+        setIsLoading(true);
 
         try {
             const result = await login(username, password);
@@ -32,6 +38,7 @@ export default function LoginPage() {
             localStorage.setItem("token", result.access);
             localStorage.setItem("refresh", result.refresh);
             localStorage.setItem("salt", result.salt);
+            saveLogId(result.log_id);
 
             toast.success("Login successful!");
             
@@ -40,6 +47,8 @@ export default function LoginPage() {
             router.push(redirectTo);
         } catch (err: any) {
             console.error(err);
+
+            setIsLoading(false);
 
             if (err?.remaining_seconds) {
                 const seconds = err.remaining_seconds;
@@ -100,13 +109,13 @@ export default function LoginPage() {
                 <button 
                     type="submit"
                     className={`w-full p-2 rounded-lg transition ${
-                        lockTime
+                        lockTime || isLoading
                             ? "bg-gray-800 cursor-not-allowed text-gray-600"
                             : "bg-[#0e4a5a] hover:bg-cyan-900 text-cyan-300 border border-cyan-700 font-mono tracking-widest"
                     }`}
-                    disabled={!!lockTime}
+                    disabled={!!lockTime || isLoading}
                 >
-                    Login
+                    {isLoading ? "Authenticating..." : "Login" }
                 </button>
 
                 <p className="text-sm text-center text-cyan-600">

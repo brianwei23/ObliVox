@@ -1,6 +1,6 @@
 from rest_framework import generics
 from django.contrib.auth.models import User
-from .serializers import RegisterSerializer, RecordingSerializer, FolderSerializer, UserSearchSerializer
+from .serializers import RegisterSerializer, RecordingSerializer, FolderSerializer, UserSearchSerializer, LoginLogSerializer
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.models import User
-from .models import LoginAttempt, Recording, UserProfile, Folder
+from .models import LoginAttempt, Recording, UserProfile, Folder, LoginLog
 import base64
 import secrets
 
@@ -86,10 +86,13 @@ class LoginView(APIView):
             defaults={"encryption_salt": secrets.token_hex(16)}
         )
 
+        log = LoginLog.objects.create(user=user)
+
         return Response({
             "access": str(refresh.access_token),
             "refresh": str(refresh),
             "salt": profile.encryption_salt,
+            "log_id": log.id,
         })
     
 class RecordingListView(APIView):
@@ -299,3 +302,24 @@ class RecordingShareView(APIView):
         )
 
         return Response({"detail": "Shared successfully."}, status=status.HTTP_201_CREATED)
+    
+class LoginLogListView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        logs = LoginLog.objects.filter(user=request.user).order_by('-logged_in_at')
+        serializer = LoginLogSerializer(logs, many=True)
+        return Response(serializer.data)
+    
+class LoginLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        log_id = request.data.get("log_id")
+        try:
+            log = LoginLog.objects.get(id=log_id, user=request.user)
+            log.logged_out_at = timezone.now()
+            log.save()
+            return Response({"detail": "Log out recorded."})
+        except LoginLog.DoesNotExist:
+            return Response({"detail": "Log not found."}, status=status.HTTP_404_NOT_FOUND)

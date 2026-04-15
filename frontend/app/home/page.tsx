@@ -11,7 +11,9 @@ import { getRecordings,
          decryptText, 
          base64ToUint8Array, 
          searchUsers, 
-         shareRecording 
+         shareRecording,
+         recordLogout,
+         getLogId,
        } from "../api";
 import toast from "react-hot-toast";
 import Background from "../components/site-background"
@@ -166,7 +168,17 @@ export default function Home() {
     return () => clearTimeout(delayDebounceFn);
   }, [shareSearchQuery])
 
-  function handleLogout() {
+  useEffect(() => {
+    const handleUnload = () => {
+      recordLogout();
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+    return() => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
+
+  async function handleLogout() {
+    await recordLogout();
     localStorage.removeItem("token");
     localStorage.removeItem("refresh");
     toast.success("Logging out.");
@@ -318,7 +330,13 @@ export default function Home() {
         <Background />
         <div className="relative z-10 flex items-center px-8 py-4 border-cyan-900">
           <h1 className="absolute left-1/2 -translate-x-1/2 text-3xl font-bold text-cyan-400 tracking-widest font-mono">ObliVox</h1>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              onClick={() => router.push("/logs")}
+              className="bg-[#0e4a5a] text-cyan-300 border border-cyan-700 px-6 py-2 rounded-lg hover:bg-cyan-900 transition font-mono tracking-widest text-sm -mt-2"
+            >
+              Login Log
+            </button>
             <button
               onClick={handleLogout}
               className="bg-[#0e4a5a] text-cyan-300 border border-cyan-700 px-6 py-2 rounded-lg hover:bg-cyan-900 transition font-mono tracking-widest text-sm -mt-2"
