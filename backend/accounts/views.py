@@ -11,8 +11,10 @@ from django.utils import timezone
 from datetime import timedelta
 from django.contrib.auth.models import User
 from .models import LoginAttempt, Recording, UserProfile, Folder, LoginLog
-import base64
-import secrets
+import base64, secrets, os
+from django.http import JsonResponse, HttpResponseForbidden
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -323,3 +325,17 @@ class LoginLogoutView(APIView):
             return Response({"detail": "Log out recorded."})
         except LoginLog.DoesNotExist:
             return Response({"detail": "Log not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+@csrf_exempt
+def cleanup_expired_recordings(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    
+    now = timezone.now()
+
+    deleted_count = Recording.objects.filter(
+        expires_at__isnull=False,
+        expires_at__lt=now
+    ).delete()[0]
+
+    return JsonResponse({"deleted": deleted_count})

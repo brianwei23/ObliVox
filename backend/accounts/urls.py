@@ -1,6 +1,8 @@
-from django.urls import path
-from .views import RegisterView, LoginView, RecordingListView, RecordingDetailView, FolderListView, FolderDetailView, SharedRecordingListView, UserSearchView, RecordingShareView, LoginLogListView, LoginLogoutView
+from django.urls import path, include
+from django.http import JsonResponse
+from .views import RegisterView, LoginView, RecordingListView, RecordingDetailView, FolderListView, FolderDetailView, SharedRecordingListView, UserSearchView, RecordingShareView, LoginLogListView, LoginLogoutView, cleanup_expired_recordings 
 from rest_framework_simplejwt.views import TokenRefreshView
+
 
 urlpatterns = [
     path('register/', RegisterView.as_view()),
@@ -15,4 +17,5 @@ urlpatterns = [
     path('recordings/shared/', SharedRecordingListView.as_view(), name='shared-recordings'),
     path('logs/', LoginLogListView.as_view(), name='login-logs'),
     path('logs/logout/', LoginLogoutView.as_view(), name='login-logout'),
+    path("cleanup/", cleanup_expired_recordings),
 ]

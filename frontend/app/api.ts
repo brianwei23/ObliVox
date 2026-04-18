@@ -35,7 +35,7 @@ export function getFolderDecoyMode(folderId: number): boolean {
 }
 
 export async function register(username: string, password: string) {
-    const res = await fetch("http://localhost:8000/api/auth/register/", {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/register/`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -59,7 +59,7 @@ export async function register(username: string, password: string) {
 }
 
 export async function login(username: string, password: string) {
-    const res = await fetch("http://localhost:8000/api/auth/login/", {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/login/`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -87,7 +87,7 @@ export async function login(username: string, password: string) {
 }
 
 export async function getRecordings(folderId: number | null = null, isDecoy: boolean = false) {
-    let url = "http://localhost:8000/api/auth/recordings/";
+    let url = `${process.env.NEXT_PUBLIC_API_URL}/api/recordings/`;
     if (folderId) {
         url += `?folder_id=${folderId}&is_decoy=${isDecoy}`;
     }
@@ -125,7 +125,7 @@ export async function uploadRecording(
     const ivBase64 = btoa(String.fromCharCode(...iv));
     const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, keyToUse);
 
-    const res = await authFetch("http://localhost:8000/api/auth/recordings/", {
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recordings/`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -155,7 +155,7 @@ export async function renameRecording(id: number, name: string, encryptionKey?: 
 
     const { encrypted: encryptedName, iv: nameIv } = await encryptText(name, keyToUse);
 
-    const res = await authFetch(`http://localhost:8000/api/auth/recordings/${id}/`, {
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recordings/${id}/`, {
         method: "PATCH",
         headers: {
             "Content-Type": "application/json",
@@ -170,7 +170,7 @@ export async function renameRecording(id: number, name: string, encryptionKey?: 
 
 export async function deleteRecording(id: number) {
     const token = localStorage.getItem("token");
-    const res = await authFetch(`http://localhost:8000/api/auth/recordings/${id}/`, {
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recordings/${id}/`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` },
     });
@@ -181,7 +181,7 @@ async function refreshAccessToken(): Promise<string | null> {
     const refresh = localStorage.getItem("refresh");
     if (!refresh) return null;
 
-    const res = await fetch("http://localhost:8000/api/auth/token/refresh/", {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/token/refresh/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh }),
@@ -274,7 +274,7 @@ export async function decryptText(encryptedBase64: string, ivBase64: string, key
 }
 
 export async function getFolders() {
-    const res = await authFetch("http://localhost:8000/api/auth/folders/");
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/folders/`);
     let data;
     try { data = await res.json(); } catch { data = {}; }
     if (!res.ok) throw data;
@@ -282,7 +282,7 @@ export async function getFolders() {
 }
 
 export async function getFolder(id: number) {
-    const res = await authFetch(`http://localhost:8000/api/auth/folders/${id}/`);
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/folders/${id}/`);
     let data;
     try { data = await res.json(); } catch { data = {}; }
     if (!res.ok) throw data;
@@ -324,7 +324,7 @@ export async function createFolder(name: string, folderPassword: string | null =
         }
     }
 
-    const res = await authFetch("http://localhost:8000/api/auth/folders/", {
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/folders/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -355,7 +355,7 @@ export async function renameFolder(id: number, name: string) {
 
     const { encrypted: encryptedName, iv: nameIv }  = await encryptText(name, sessionKey);
 
-    const res = await authFetch(`http://localhost:8000/api/auth/folders/${id}/`, {
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/folders/${id}/`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: encryptedName, name_iv: nameIv }),
@@ -367,7 +367,7 @@ export async function renameFolder(id: number, name: string) {
 }
 
 export async function deleteFolder(id: number) {
-    const res = await authFetch(`http://localhost:8000/api/auth/folders/${id}/`, {
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/folders/${id}/`, {
         method: "DELETE",
     });
     if (!res.ok) throw await res.json();
@@ -410,7 +410,7 @@ export function base64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
 }
 
 export async function searchUsers(query: string) {
-    const res = await authFetch(`http://localhost:8000/api/auth/users/search/?q=${encodeURIComponent(query)}`);
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/search/?q=${encodeURIComponent(query)}`);
 
     if (!res.ok) {
         return [];
@@ -444,7 +444,7 @@ export async function shareRecording(
 
     const { encrypted: encryptedName, iv: nameIv } = await encryptText(originalName, shareKey);
 
-    const res = await authFetch(`http://localhost:8000/api/auth/recordings/${recordingId}/share/`, {
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recordings/${recordingId}/share/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -462,7 +462,7 @@ export async function shareRecording(
 }
 
 export async function getSharedRecordings() {
-    const res = await authFetch(`http://localhost:8000/api/auth/recordings/shared/`);
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recordings/shared/`);
     if (!res.ok) throw new Error("Failed to fetch shared recordings.");
     return await res.json();
 }
@@ -480,7 +480,7 @@ export async function recordLogout() {
     const logId = getLogId();
     if (!logId) return;
     try {
-        await authFetch("http://localhost:8000/api/auth/logs/logout/", {
+        await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/logs/logout/`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ log_id: parseInt(logId) }),
@@ -493,7 +493,7 @@ export async function recordLogout() {
 }
 
 export async function getLoginLogs() {
-    const res = await authFetch("http://localhost:8000/api/auth/logs/");
+    const res = await authFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/logs/`);
     let data;
     try { data = await res.json(); } catch { data = []; }
     if (!res.ok) throw data;
